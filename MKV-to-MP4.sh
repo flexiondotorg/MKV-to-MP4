@@ -3,6 +3,8 @@
 
 #TODO!
 # - Add option to answer "Yes" to all prompts, useful for scripting.
+# - Double check and (possibly) fix faac 5.1 channel encoding.
+# - Only work with filename that do not have spaces in the names.
 
 function usage {
 	echo "Usage"
@@ -92,7 +94,7 @@ function get_info {
 	fi
 	
 	# Get the mplayer 'aid' for this audio track.
-	AUDIO_AID=`${CMD_MPLAYER} ${MKV_FILENAME} -endpos 0 -ao null -vo null 2>/dev/null | grep "Track ID ${AUDIO_ID}:" | cut -d',' -f2 | sed 's/ //'`
+	AUDIO_AID=`${CMD_MPLAYER} ${MKV_FILENAME} -endpos 0 -ao null -vo null 2>/dev/null | ${CMD_GREP} "Track ID ${AUDIO_ID}:" | ${CMD_CUT} -d',' -f2 | ${CMD_SED} 's/ //'`
 
 	# Is the video h264 and audio AC3 or DTS?
 	if [ "${VIDEO_FORMAT}" != "MPEG4/ISO/AVC" ]; then
@@ -320,7 +322,11 @@ do
         	shift;;        	
         -faac|--faac)
         	FORCE_FAAC=1
-        	echo " - Forcing the use of 'faac'"    	        	
+        	echo " - Forcing the use of 'faac'"
+        	# I suspect that 5.1 conversion sing facc has incorrect channel assignments
+        	# Force stereo for the time being.
+     	    FORCE_2CH=1
+        	echo " - Forcing a stereo down mix"
         	shift;; 
         -help|--help)
         	usage        	           	
@@ -348,17 +354,17 @@ CMD_NEROAACENC=`validate_tool neroAacEnc optional`
 # Get the track details
 echo "Getting Matroska file details"
 # Is the .mkv a real Matroska file?
-MKV_VALID=`${CMD_FILE} ${MKV_FILENAME} | ${CMD_GREP} Matroska`
+MKV_VALID=`${CMD_FILE} "${MKV_FILENAME}" | ${CMD_GREP} Matroska`
 if [ -z "${MKV_VALID}" ]; then
     echo " - ERROR! ${0} requires valid a Matroska file as input. The file you passed is not a Matroska file."
     exit 1
 fi	
 
 # Strip .mkv from the input file name so it can be used to define other filenames
-FILENAME=`echo ${MKV_FILENAME} | ${CMD_SED} 's/.mkv//'`
+FILENAME=`echo "${MKV_FILENAME}" | ${CMD_SED} 's/.mkv//'`
 
 # Get the size of the .mkv file in bytes (b)
-MKV_SIZE=`${CMD_STAT} ${MKV_FILENAME} | ${CMD_GREP} Size | ${CMD_CUT} -f1 | ${CMD_SED} 's/ \|Size://g'`
+MKV_SIZE=`${CMD_STAT} "${MKV_FILENAME}" | ${CMD_GREP} Size | ${CMD_CUT} -f1 | ${CMD_SED} 's/ \|Size://g'`
 
 # The PS3 can't play MP4 files which are bigger than 4GB and FAT32 doesn't like files bigger than 4GB.
 # Lets figure out if we need to split the MKV the split size should be in kilo-bytes (kb)
@@ -377,7 +383,7 @@ else
 fi
 
 if [ ${SPLIT_SIZE} -ne 0 ]; then
-	echo "Splitting ${MKV_FILENAME} at ${SPLIT_SIZE}K boundary"
+	echo "Splitting "${MKV_FILENAME}" at ${SPLIT_SIZE}K boundary"
 	if [ -e "${FILENAME}-part-001.mkv" ]; then
 	    read -n 1 -s -p " - WARNING! Detected MKV file parts. Do you want to re-split the MKV file? (y/n) : " SPLIT
 	    echo
@@ -389,18 +395,18 @@ fi
 # Do we need to operate on the split file parts?
 if [ ${SPLIT_SIZE} -ne 0 ]; then
 
-	# Split the MKV file is required or requested.
+	# Split the MKV file if required or requested.
 	if [ "${SPLIT}" == "y" ]; then
-		${CMD_MKVMERGE} -o ${FILENAME}-part.mkv --split ${SPLIT_SIZE}K ${MKV_FILENAME}		
+		${CMD_MKVMERGE} -o "${FILENAME}"-part.mkv --split ${SPLIT_SIZE}K "${MKV_FILENAME}"
 	fi
 	
-	for MKV_PART_FILENAME in `ls -1 ${FILENAME}-part-00*.mkv` 
+	for MKV_PART_FILENAME in `ls -1 "${FILENAME}"-part-00*.mkv` 
 	do
 		# Set the MKV_FILENAME to the current MKV file part.
-		MKV_FILENAME=${MKV_PART_FILENAME}
+		MKV_FILENAME="${MKV_PART_FILENAME}"
 		# Set FILENAME based on the current MKV file part
-		FILENAME=`echo ${MKV_FILENAME} | ${CMD_SED} 's/.mkv//'`
-		get_info ${MKV_FILENAME}
+		FILENAME=`echo "${MKV_FILENAME}" | ${CMD_SED} 's/.mkv//'`
+		get_info "${MKV_FILENAME}"
 		extract_video
 		convert_video
 		convert_subtitles
@@ -411,7 +417,7 @@ else
 	echo "Not splitting ${MKV_FILENAME}"
 	# Create empty MKV_PART_FILENAME variable
 	MKV_PART_FILENAME=""
-	get_info ${MKV_FILENAME}
+	get_info "${MKV_FILENAME}"
 	extract_video
 	convert_video
 	convert_subtitles	
