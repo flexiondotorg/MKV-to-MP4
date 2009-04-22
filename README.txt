@@ -76,9 +76,10 @@ References
 
  - http://wiki.flexion.org/ConvertingMKV.html
 
-v1.1 2009, 17th April.
+v1.1 2009, 23rd April.
  - Fixed tool validation
  - Fixed optional parameter parsing
+ - Improved use of 'stat'
  - MIT license
 
 v1.0 2009, 27th January.
