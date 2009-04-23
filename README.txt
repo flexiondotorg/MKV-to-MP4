@@ -56,8 +56,8 @@ You can also pass several optional parameters
 
 Requirements
 
- - cut, echo, faac, file, grep, mkfifo, mktemp, mkvextract, mkvinfo, mkvmerge,
-   mplayer, neroAacEnc, python, rm, sed, stat, MP4Box.
+ - cat, cut, echo, faac, file, grep, mkfifo, mktemp, mkvextract, mkvinfo, 
+   mkvmerge, mplayer, neroAacEnc, python, rm, sed, stat, which, MP4Box.
    
 Known Limitations
 
