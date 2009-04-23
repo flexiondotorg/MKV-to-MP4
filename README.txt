@@ -63,7 +63,8 @@ Known Limitations
 
  - AAC 5.1 channel mapping when using 'faac' is still not correct. 
  - Add option to answer "Yes" to all prompts, useful for scripting. 
-
+ - Better use of FIFOs could reduce file I/O.
+ 
 Source Code
 
 You can checkout the current branch from my Bazaar repository. This is a 

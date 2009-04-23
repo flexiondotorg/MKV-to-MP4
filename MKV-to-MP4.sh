@@ -39,10 +39,10 @@ function usage {
     echo "  ${0} movie.mkv [--yes] [--stereo] [--faac] [--help]"
     echo ""
     echo "You can also pass several optional parameters"
-    echo "  --yes   : Answer Yes to all prompts."
+    echo "  --yes    : Answer Yes to all prompts."
     echo "  --stereo : Force a stereo down mix."
-    echo "  --faac  : Force the use of faac, even if NeroAacEnc is available."
-    echo "  --help  : This help."    
+    echo "  --faac   : Force the use of faac, even if NeroAacEnc is available."
+    echo "  --help   : This help."    
     echo
     exit 1
 }
@@ -202,27 +202,31 @@ function convert_audio {
     M4A_FILENAME="${FILENAME}_${AUDIO_CH}ch.aac"
     
 	# Setup the audio codecs and multi channel mappings    
-	if [ "${AUDIO_FORMAT}" == "AC3" ]; then
+	#if [ "${AUDIO_FORMAT}" == "AC3" ]; then
 		# Map the AC3 5.1 channels to the input format of NeroAacEnc and faac
-	    local NERO_CHANNELS=",channels=6:6:0:0:1:2:2:1:3:4:4:5:5:3"
-    	local FAAC_CHANNELS=",channels=6:6:0:2:1:4:2:3:3:0:4:1:5:5"	    
-		local AUDIO_CODEC="ffac3"
-		local NERO_QUALITY="-q 0.30"		#	~288kbps = 48kpbs per channel    	
-		local FAAC_QUALITY="-q 100 -b 288"	#	 288kbps = 48kbps per channel    			
-	else	
+	    #local NERO_CHANNELS=",channels=6:6:0:0:1:2:2:1:3:4:4:5:5:3"
+    	#local FAAC_CHANNELS=",channels=6:6:0:2:1:4:2:3:3:0:4:1:5:5"	    
+		#local AUDIO_CODEC="ffac3"
+		#local NERO_QUALITY="-q 0.3" 		#	~288kbps = 48kpbs per channel    	
+		#local FAAC_QUALITY="-q 100 -b 288"	#	 288kbps = 48kbps per channel    			
+	#else	
 		# Map the DTS 5.1 channels to the input format of NeroAacEnc and faac
-	    local NERO_CHANNELS=",channels=6:6:0:2:1:0:2:1:3:4:4:5:5:3"
-	    local FAAC_CHANNELS=",channels=6:6:0:4:1:2:2:3:3:0:4:1:5:5"	    		
-		local AUDIO_CODEC="ffdca"
-		local NERO_QUALITY="-q 0.30"		#	~288kbps = 48kpbs per channel    	
-		local FAAC_QUALITY="-q 100 -b 288"	#	 288kbps = 48kbps per channel    			
-	fi		        
+	    #local NERO_CHANNELS=",channels=6:6:0:2:1:0:2:1:3:4:4:5:5:3"
+	    #local FAAC_CHANNELS=",channels=6:6:0:4:1:2:2:3:3:0:4:1:5:5"	    		
+		#local AUDIO_CODEC="ffdca"
+		#local NERO_QUALITY="-q 0.3"		    #	~288kbps = 48kpbs per channel    	
+		#local FAAC_QUALITY="-q 100 -b 288"	#	 288kbps = 48kbps per channel    			
+	#fi		        
     
     if [ ${AUDIO_CH} -eq 2 ]; then
 	    local NERO_CHANNELS=""
 	    local FAAC_CHANNELS=""	    		    
-		local NERO_QUALITY="-q 0.2"			#	~160kbps = 80kpbs per channel    	
+		#local NERO_QUALITY="-q 0.2"	    #	~160kbps = 80kpbs per channel    	
+        local NERO_QUALITY="-b 160"			#	~160kbps = 80kpbs per channel    			
 		local FAAC_QUALITY="-q 100 -b 160"	#	 160kbps = 80kbps per channel
+    else
+		local NERO_QUALITY="-b 288"			#	~160kbps = 80kpbs per channel    	
+		local FAAC_QUALITY="-q 100 -b 288"	#	 160kbps = 80kbps per channel		
     fi
             
     # Does the target file already exist, if so ask the user if we should re-encode.
@@ -236,10 +240,10 @@ function convert_audio {
     # Encode the audio
     if [ "${ENCODE}" == "y" ]; then         
         # Make sure the output files do not already exist.
-        WAV_FILENAME="${FILENAME}.wav"         	
+        FIFO_FILENAME="${FILENAME}.${AUDIO_FORMAT}"         	
         rm ${M4A_FILENAME} 2>/dev/null
-		rm ${WAV_FILENAME} 2>/dev/null	               	       
-       	mkfifo ${WAV_FILENAME}
+		rm ${FIFO_FILENAME} 2>/dev/null	               	       
+       	mkfifo ${FIFO_FILENAME}
 
 		# Which AAC Encoder should we use.
 		# - NeroAacEnc is the default unless...
@@ -248,12 +252,17 @@ function convert_audio {
 		if [ -z "neroAacEnc" ] || [ ${FORCE_FAAC} -eq 1 ] ; then
 			echo " - Using 'faac'"		
 		    # faac       : Only recommended for platforms where NeroAacEnc is not available
-			local RUN_MPLAYER="mplayer ${MKV_FILENAME} ${AUDIO_AID} -ac ${AUDIO_CODEC} -channels ${AUDIO_CH} -af format=s16le${FACC_CHANNELS} -vo null -vc null -ao pcm:fast:waveheader:file=${WAV_FILENAME} -novideo -really-quiet -nolirc"
-			faac ${FAAC_QUALITY} -o ${M4A_FILENAME} -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 ${WAV_FILENAME} & ${RUN_MPLAYER}
+			#local RUN_MPLAYER="mplayer ${MKV_FILENAME} ${AUDIO_AID} -ac ${AUDIO_CODEC} -channels ${AUDIO_CH} -af format=s16le${FACC_CHANNELS} -vo null -vc null -ao pcm:fast:waveheader:file=${WAV_FILENAME} -novideo -really-quiet -nolirc"
+			#faac ${FAAC_QUALITY} -o ${M4A_FILENAME} -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 ${WAV_FILENAME} & ${RUN_MPLAYER}
 		else
 			echo " - Using 'neroAacEnc'"		
-			local RUN_MPLAYER="mplayer ${MKV_FILENAME} ${AUDIO_AID} -ac ${AUDIO_CODEC} -channels ${AUDIO_CH} -af format=s16le${NERO_CHANNELS} -vo null -vc null -ao pcm:fast:waveheader:file=${WAV_FILENAME} -novideo -really-quiet -nolirc"
-			neroAacEnc -ignorelength ${NERO_QUALITY} -if ${WAV_FILENAME} -of ${M4A_FILENAME} & ${RUN_MPLAYER}
+			#local RUN_MPLAYER="mplayer ${MKV_FILENAME} ${AUDIO_AID} -ac ${AUDIO_CODEC} -channels ${AUDIO_CH} -af format=s16le${NERO_CHANNELS} -vo null -vc null -ao pcm:fast:waveheader:file=${WAV_FILENAME} -novideo -really-quiet -nolirc"
+        	if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	
+                a52dec -o wav "${FIFO_FILENAME}" | neroAacEnc ${NERO_QUALITY} -if - -of ${M4A_FILENAME} & #-ignorelength ${NERO_QUALITY} 
+            else
+                dcadec -o wavall "${FIFO_FILENAME}" | neroAacEnc ${NERO_QUALITY} -if - -of ${M4A_FILENAME} & #-ignorelength ${NERO_QUALITY} 
+            fi                
+		    mplayer -dumpaudio -dumpfile "${FIFO_FILENAME}" ${MKV_FILENAME}         
 		fi		       					       				
        	rm ${WAV_FILENAME}      		
     fi
