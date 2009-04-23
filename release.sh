@@ -149,14 +149,14 @@ if [ -e /etc/release.conf ]; then
 	
 		if [ -n ${T_USERNAME} ] && [ -n ${T_PASSWORD} ]; then	
 			echo "Notifying Twitter"
-	  		#curl -u ${T_USERNAME}:${T_PASSWORD} -d status="Code Released, \"${NAME} v${VER}\" - http://code.flexion.org/${NAME}.html" https://twitter.com/statuses/update.xml -k >& /dev/null
+	  		curl -u ${T_USERNAME}:${T_PASSWORD} -d status="Code Released, \"${NAME} v${VER}\" - http://code.flexion.org/${NAME}.html" https://twitter.com/statuses/update.xml -k >& /dev/null
 		else
 			"WARNING! Twitter account details are missing."
 		fi	  		
 		
 		if [ -n ${I_USERNAME} ] && [ -n ${I_PASSWORD} ]; then	
 			echo "Notifying Identica"
-		  	#curl -u ${I_USERNAME}:${I_PASSWORD} -d status="Code Released, \"${NAME} v${VER}\" - http://code.flexion.org/${NAME}.html" https://identi.ca/api/statuses/update.xml -k >& /dev/null			
+		  	curl -u ${I_USERNAME}:${I_PASSWORD} -d status="Code Released, \"${NAME} v${VER}\" - http://code.flexion.org/${NAME}.html" https://identi.ca/api/statuses/update.xml -k >& /dev/null			
 		else
 			"WARNING! Identica account details are missing."		
 		fi
