@@ -27,7 +27,7 @@
 # OTHER DEALINGS IN THE SOFTWARE.
 
 IFS=$'\n'
-VER="1.1"
+VER="1.2"
 
 echo "MKV-to-MP4 v${VER} - Creates a PlayStation 3 compatible MPEG-4 from a MKV."
 echo "Copyright (c) 2009 Flexion.Org, http://flexion.org. MIT License" 
@@ -36,12 +36,14 @@ echo
 function usage {
     echo
 	echo "Usage"
-    echo "  ${0} movie.mkv [--yes] [--stereo] [--faac] [--help]"
+    echo "  ${0} movie.mkv [--yes] [--stereo] [--faac] [--split] [--help]"
     echo ""
     echo "You can also pass several optional parameters"
     echo "  --yes    : Answer Yes to all prompts."
     echo "  --stereo : Force a stereo down mix."
     echo "  --faac   : Force the use of faac, even if NeroAacEnc is available."
+    echo "  --split  : If required, the output will be split at a boundary less than"
+    echo "             4GB for FAT32 compatibility"    
     echo "  --help   : This help."    
     echo
     exit 1
@@ -95,10 +97,6 @@ function get_info {
 		AUDIO_CH="2"
 	fi
 	
-	# Get the mplayer 'aid' for this audio track.
-	# TODO - Change this the the new way
-	AUDIO_AID=`mplayer ${MKV_FILENAME} -endpos 0 -ao null -vo null 2>/dev/null | grep "Track ID ${AUDIO_ID}:" | cut -d',' -f2 | sed 's/ //'`
-
 	# Is the video h264 and audio AC3 or DTS?
 	if [ "${VIDEO_FORMAT}" != "MPEG4/ISO/AVC" ]; then
 		echo " - ERROR! The Video track is not h264. I can't process ${VIDEO_FORMAT}, please use a different tool."
@@ -127,8 +125,9 @@ function get_info {
 	rm ${MKV_INFO} 2>/dev/null
 }
 
-function extract_video {	
+function extract_streams {	
 	VIDEO_FILENAME=${FILENAME}.h264
+    AUDIO_FILENAME="${FILENAME}.${AUDIO_FORMAT}"         		
 	SUBS_FILENAME=${FILENAME}.srt
 	
 	echo "Extracting Video"
@@ -147,9 +146,9 @@ function extract_video {
     
     	# Do the extract, extracting the subtitles if they were detected.
 		if [ -z ${SUBS_ID} ]; then
-			mkvextract tracks ${MKV_FILENAME} ${VIDEO_ID}:${VIDEO_FILENAME}
+			mkvextract tracks ${MKV_FILENAME} ${VIDEO_ID}:${VIDEO_FILENAME} ${AUDIO_ID}:${AUDIO_FILENAME}
 		else
-			mkvextract tracks ${MKV_FILENAME} ${VIDEO_ID}:${VIDEO_FILENAME} ${SUBS_ID}:${SUBS_FILENAME} 
+			mkvextract tracks ${MKV_FILENAME} ${VIDEO_ID}:${VIDEO_FILENAME} ${AUDIO_ID}:${AUDIO_FILENAME} ${SUBS_ID}:${SUBS_FILENAME} 
 		fi	
 	fi    	
 }
@@ -192,42 +191,34 @@ function convert_subtitles {
 
 # Pass in how many audio channels to encode
 function convert_audio {
-    
+                          
+    if [ ${AUDIO_CH} -eq 2 ]; then
+		FAAC_QUALITY="120"
+		NERO_QUALITY="0.5"
+  		DECODE_MODE="wav"          		
+    else
+		FAAC_QUALITY="210"	
+		NERO_QUALITY="0.5"		
+   		DECODE_MODE="wav6"        
+    fi
+            
+    # dcadec creates 32-bit 5.1 wav files which 'faac' can't eat.
+    # dcadec wavdolby output is borked.       
+    # Therefore, if 'faac' is forced and the audio is DTS we need to downmix to 
+    # stereo :-(
+    if [ ${FORCE_FAAC} -eq 1 ] && [ "${AUDIO_FORMAT}" == "DTS" ]; then            
+    	AUDIO_CH=2                  
+		FAAC_BITRATE="120"    	              
+ 		DECODE_MODE="wav"  		
+    fi
+
 	if [ ${AUDIO_CH} -eq 6 ]; then
 		echo "Converting ${AUDIO_CH}ch ${AUDIO_FORMAT} to Multi-channel MPEG4-AAC"                    
 	else
    	 	echo "Converting ${AUDIO_CH}ch ${AUDIO_FORMAT} to Stereo MPEG4-AAC"                
 	fi
     
-    M4A_FILENAME="${FILENAME}_${AUDIO_CH}ch.aac"
-    
-	# Setup the audio codecs and multi channel mappings    
-	#if [ "${AUDIO_FORMAT}" == "AC3" ]; then
-		# Map the AC3 5.1 channels to the input format of NeroAacEnc and faac
-	    #local NERO_CHANNELS=",channels=6:6:0:0:1:2:2:1:3:4:4:5:5:3"
-    	#local FAAC_CHANNELS=",channels=6:6:0:2:1:4:2:3:3:0:4:1:5:5"	    
-		#local AUDIO_CODEC="ffac3"
-		#local NERO_QUALITY="-q 0.3" 		#	~288kbps = 48kpbs per channel    	
-		#local FAAC_QUALITY="-q 100 -b 288"	#	 288kbps = 48kbps per channel    			
-	#else	
-		# Map the DTS 5.1 channels to the input format of NeroAacEnc and faac
-	    #local NERO_CHANNELS=",channels=6:6:0:2:1:0:2:1:3:4:4:5:5:3"
-	    #local FAAC_CHANNELS=",channels=6:6:0:4:1:2:2:3:3:0:4:1:5:5"	    		
-		#local AUDIO_CODEC="ffdca"
-		#local NERO_QUALITY="-q 0.3"		    #	~288kbps = 48kpbs per channel    	
-		#local FAAC_QUALITY="-q 100 -b 288"	#	 288kbps = 48kbps per channel    			
-	#fi		        
-    
-    if [ ${AUDIO_CH} -eq 2 ]; then
-	    local NERO_CHANNELS=""
-	    local FAAC_CHANNELS=""	    		    
-		#local NERO_QUALITY="-q 0.2"	    #	~160kbps = 80kpbs per channel    	
-        local NERO_QUALITY="-b 160"			#	~160kbps = 80kpbs per channel    			
-		local FAAC_QUALITY="-q 100 -b 160"	#	 160kbps = 80kbps per channel
-    else
-		local NERO_QUALITY="-b 288"			#	~160kbps = 80kpbs per channel    	
-		local FAAC_QUALITY="-q 100 -b 288"	#	 160kbps = 80kbps per channel		
-    fi
+    M4A_FILENAME="${FILENAME}_${AUDIO_CH}ch.aac"    
             
     # Does the target file already exist, if so ask the user if we should re-encode.
     if [ -e ${M4A_FILENAME} ]; then    
@@ -240,31 +231,32 @@ function convert_audio {
     # Encode the audio
     if [ "${ENCODE}" == "y" ]; then         
         # Make sure the output files do not already exist.
-        FIFO_FILENAME="${FILENAME}.${AUDIO_FORMAT}"         	
         rm ${M4A_FILENAME} 2>/dev/null
-		rm ${FIFO_FILENAME} 2>/dev/null	               	       
-       	mkfifo ${FIFO_FILENAME}
 
-		# Which AAC Encoder should we use.
-		# - NeroAacEnc is the default unless...
-		#    * NeroAacEnc is not available then use 'faac'
-	    #    * -faac parameter was set which forces the use 'faac'
-		if [ -z "neroAacEnc" ] || [ ${FORCE_FAAC} -eq 1 ] ; then
+		# Which AAC Encoder should we use, NeroAacEnc is the default unless...
+		#  * NeroAacEnc is not available then use 'faac'
+	    #  * -faac parameter was set which forces the use 'faac'
+	    
+	    # -I 2,4    
+		if [ ${FORCE_FAAC} -eq 1 ]; then
 			echo " - Using 'faac'"		
-		    # faac       : Only recommended for platforms where NeroAacEnc is not available
-			#local RUN_MPLAYER="mplayer ${MKV_FILENAME} ${AUDIO_AID} -ac ${AUDIO_CODEC} -channels ${AUDIO_CH} -af format=s16le${FACC_CHANNELS} -vo null -vc null -ao pcm:fast:waveheader:file=${WAV_FILENAME} -novideo -really-quiet -nolirc"
-			#faac ${FAAC_QUALITY} -o ${M4A_FILENAME} -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 ${WAV_FILENAME} & ${RUN_MPLAYER}
+	        if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	
+                a52dec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 -
+            else                
+                dcadec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 -
+            fi                			
 		else
 			echo " - Using 'neroAacEnc'"		
-			#local RUN_MPLAYER="mplayer ${MKV_FILENAME} ${AUDIO_AID} -ac ${AUDIO_CODEC} -channels ${AUDIO_CH} -af format=s16le${NERO_CHANNELS} -vo null -vc null -ao pcm:fast:waveheader:file=${WAV_FILENAME} -novideo -really-quiet -nolirc"
         	if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	
-                a52dec -o wav "${FIFO_FILENAME}" | neroAacEnc ${NERO_QUALITY} -if - -of ${M4A_FILENAME} & #-ignorelength ${NERO_QUALITY} 
+                a52dec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME} 
             else
-                dcadec -o wavall "${FIFO_FILENAME}" | neroAacEnc ${NERO_QUALITY} -if - -of ${M4A_FILENAME} & #-ignorelength ${NERO_QUALITY} 
+                dcadec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME}
             fi                
-		    mplayer -dumpaudio -dumpfile "${FIFO_FILENAME}" ${MKV_FILENAME}         
+            
+			echo " - Extracting audio from MP4 container..."
+            mp4creator --extract=1 "${M4A_FILENAME}" "${FILENAME}_${AUDIO_CH}ch_adts.aac"    
+            M4A_FILENAME="${FILENAME}_${AUDIO_CH}ch_adts.aac"
 		fi		       					       				
-       	rm ${WAV_FILENAME}      		
     fi
 }
 
@@ -280,32 +272,41 @@ function create_mp4 {
 	else 
 		REMUX="y"
 	fi
-    
+       
 	# Remux the MPEG-4 container
+	# Some builds of MP4Box segfault, if you encounter this problem uncomment the 
+	# 'mp4creator' lines below and comment out the 'MP4Box' lines. MP4Box create
+	# more compatible MPEG-4 files so it is desirable. 
 	if [ "${REMUX}" == "y" ]; then	      	
 		# OK, pack the MPEG-4 and include subtitles if we have any.		
 		if [ -z ${SUBS_ID} ]; then
-			MP4Box -fps ${VIDEO_FPS} -add ${VIDEO_FILENAME} -add ${M4A_FILENAME} -new ${MP4_FILENAME}        
-		else	
-			MP4Box -fps ${VIDEO_FPS} -add ${VIDEO_FILENAME} -add ${M4A_FILENAME} -add ${TTXT_FILENAME} -new ${MP4_FILENAME}
+			#MP4Box -fps ${VIDEO_FPS} -add ${VIDEO_FILENAME} -add ${M4A_FILENAME} -new ${MP4_FILENAME}		            
+            mp4creator --create="${VIDEO_FILENAME}" -r ${VIDEO_FPS} "${MP4_FILENAME}"
+            mp4creator --create="${M4A_FILENAME}" "${MP4_FILENAME}"
+		else
+			#MP4Box -fps ${VIDEO_FPS} -add ${VIDEO_FILENAME} -add ${M4A_FILENAME} -add ${TTXT_FILENAME} -new ${MP4_FILENAME}					
+            mp4creator --create="${VIDEO_FILENAME}" -r ${VIDEO_FPS} "${MP4_FILENAME}"
+            mp4creator --create="${M4A_FILENAME}" "${MP4_FILENAME}"	
 		fi			
 	fi        
 
 	# Remove the transient files
 	echo "Removing temporary files"
-	#echo " - ${VIDEO_FILENAME}"
-	rm ${VIDEO_FILENAME} 2>/dev/null
-	#echo " - ${MKV_PART_FILENAME}"
-	rm ${MKV_PART_FILENAME} 2>/dev/null
-	#echo " - ${M4A_FILENAME}"	
-	rm ${M4A_FILENAME} 2>/dev/null
-	rm ${SUBS_FILENAME} 2>/dev/null
-	rm ${TTXT_FILENAME} 2>/dev/null
+	###echo " - ${VIDEO_FILENAME}"
+	#rm ${VIDEO_FILENAME} 2>/dev/null
+	###echo " - ${MKV_PART_FILENAME}"
+	#rm ${MKV_PART_FILENAME} 2>/dev/null
+	###echo " - ${M4A_FILENAME}"	
+	#rm ${M4A_FILENAME} 2>/dev/null
+	#rm ${SUBS_FILENAME} 2>/dev/null
+	#rm ${TTXT_FILENAME} 2>/dev/null
 }
 
 # Define the commands we will be using. If you don't have them, get them! ;-)
 REQUIRED_TOOLS=`cat << EOF
+a52dec
 cut
+dcadec
 echo
 faac
 file
@@ -315,7 +316,7 @@ mktemp
 mkvextract
 mkvinfo
 mkvmerge
-mplayer
+mp4creator
 neroAacEnc
 python
 rm
@@ -357,6 +358,7 @@ fi
 FORCE_YES=0
 FORCE_2CH=0
 FORCE_FAAC=0
+FORCE_SPLIT=0
 
 # Check for optional parameters
 while [ $# -gt 0 ]; 
@@ -372,6 +374,9 @@ do
         -f|-faac|--faac)
         	FORCE_FAAC=1
         	shift;;    
+		-s|--split|-split)
+            FORCE_SPLIT=1
+            shift;;          	
         -h|--h|-help|--help|-?)
             usage;;        	    	           	
        	*)
@@ -383,23 +388,27 @@ done
 # Strip .mkv from the input file name so it can be used to define other filenames
 FILENAME=`echo ${MKV_FILENAME} | sed 's/.mkv//'`
 
-# Get the size of the .mkv file in bytes (b)
-MKV_SIZE=`stat -c%s "${MKV_FILENAME}"`
+if [ ${FORCE_SPLIT} -eq 1 ]; then
+    # Get the size of the .mkv file in bytes (b)
+    MKV_SIZE=`stat -c%s "${MKV_FILENAME}"`
 
-# The PS3 can't play MP4 files which are bigger than 4GB and FAT32 doesn't like files bigger than 4GB.
-# Lets figure out if we need to split the MKV the split size should be in kilo-bytes (kb)
-if [ ${MKV_SIZE} -ge 12884901888 ]; then    
-	# >= 12gb : Split into 3.5GB chunks ensuring PS3 and FAT32 compatibility
-	SPLIT_SIZE="3670016"
-elif [ ${MKV_SIZE} -ge 9663676416 ]; then   
-	# >= 9gb  : Divide .mkv filesize by 3 and split by that amount
-	SPLIT_SIZE=$(((${MKV_SIZE} / 3) / 1024))
-elif [ ${MKV_SIZE} -ge 4294967296 ]; then   
-	# >= 4gb  : Divide .mkv filesize by 2 and split by that amount
-	SPLIT_SIZE=$(((${MKV_SIZE} / 2) / 1024))
-else										
-	# File is small enough to not require splitting
-	SPLIT_SIZE="0"
+    # The PS3 can't play MP4 files which are bigger than 4GB and FAT32 doesn't like files bigger than 4GB.
+    # Lets figure out if we need to split the MKV the split size should be in kilo-bytes (kb)
+    if [ ${MKV_SIZE} -ge 12884901888 ]; then    
+    	# >= 12gb : Split into 3.5GB chunks ensuring PS3 and FAT32 compatibility
+	    SPLIT_SIZE="3670016"
+    elif [ ${MKV_SIZE} -ge 9663676416 ]; then   
+	    # >= 9gb  : Divide .mkv filesize by 3 and split by that amount
+    	SPLIT_SIZE=$(((${MKV_SIZE} / 3) / 1024))
+    elif [ ${MKV_SIZE} -ge 4294967296 ]; then   
+	    # >= 4gb  : Divide .mkv filesize by 2 and split by that amount
+    	SPLIT_SIZE=$(((${MKV_SIZE} / 2) / 1024))
+    else										
+	    # File is small enough to not require splitting
+    	SPLIT_SIZE="0"
+    fi
+else
+    SPLIT_SIZE="0"
 fi
 
 if [ ${SPLIT_SIZE} -ne 0 ]; then
@@ -427,7 +436,7 @@ if [ ${SPLIT_SIZE} -ne 0 ]; then
 		# Set FILENAME based on the current MKV file part
 		FILENAME=`echo ${MKV_FILENAME} | sed 's/.mkv//'`
 		get_info ${MKV_FILENAME}
-		extract_video
+		extract_streams
 		convert_video
 		convert_subtitles
 		convert_audio
@@ -438,7 +447,7 @@ else
 	# Create empty MKV_PART_FILENAME variable
 	MKV_PART_FILENAME=""
 	get_info ${MKV_FILENAME}
-	extract_video
+	extract_streams
 	convert_video
 	convert_subtitles	
 	convert_audio
