@@ -43,71 +43,50 @@ MPEG-4. The PS3 can't display these subtitles but some software players can.
 The script can optionally split the Matroska if it is greater than 4GB to ensure 
 Play Station 3, Xbox 360 and FAT32 compatibility. 
 
-This script works on Ubuntu Linux and should work on any other Linux/Unix 
-flavour and possibly Mac OS X providing you have the required tools installed. 
-
-Usage
-
-  ./MKV-to-MP4.sh movie.mkv [--yes] [--stereo] [--faac] [--help]
-
-You can also pass several optional parameters
-  --yes    : Answer Yes to all prompts.
-  --stereo : Force a stereo down mix.
-  --faac   : Force the use of faac, even if NeroAacEnc is available.
-  --help   : This help.
-
-Install
-
-MKV-to-MP4.sh requires a52dec 0.7.5 CVS and dcadec 0.0.5. a52dec can decode AC3
-to 5.1 channel WAV files and dcadec can de decode DTS to 5.1 channel WAV files. 
-
-This is how to install a52dec 0.7.5 CVS on Ubuntu or Debian.
-
- aptitude install build-essential cvs
- cvs -z3 -d:pserver:anonymous@liba52.cvs.sourceforge.net:/cvsroot/liba52 co -P a52dec
- cd a52dec
- ./bootstrap
- ./configure --prefix=/usr/local
- make
- sudo make install
-
-This is how to install dcadec 0.0.5 on Ubuntu or Debian.
-
- aptitude install build-essential
- wget -c http://download.videolan.org/pub/videolan/libdca/0.0.5/libdca-0.0.5.tar.bz2
- tar jxvf libdca-0.0.5.tar.bz2
- cd libdca-0.0.5/
- ./configure --prefix=/usr/local
- make
- cd src
- sudo make install 
-
-If 'neroAacEnc' is installed then if MKV-to-MP4.sh will use it in preference to 
-'faac' for encoding the AAC audio as it produces better quality output. 
-neroAacEnc is optional, this is how to install it.
+If 'neroAacEnc' is installed then it in preference to 'faac' for encoding the 
+AAC audio as it produces better quality output. neroAacEnc is optional, this is 
+how to install it.
 
  wget http://ftp6.nero.com/tools/NeroDigitalAudio.zip
  unzip NeroDigitalAudio.zip
  chmod 755 linux/*
  sudo mv linux/* /usr/local/bin/
 
+This script works on Ubuntu Linux and should work on any other Linux/Unix 
+flavour and possibly Mac OS X providing you have the required tools installed. 
+
+Usage
+
+  MKV-to-MP4.sh movie.mkv [--yes] [--stereo] [--faac] [--mp4creator] [--split] [--keep] [--help]
+
+You can also pass several optional parameters
+  --yes        : Answer Yes to all prompts.
+  --stereo     : Force a stereo down mix.
+  --faac       : Force the use of faac, even if NeroAacEnc is available.
+  --mp4creator : Force the use of mp4creator instead of MP4Box.
+  --split      : If required, the output will be split at a boundary less than
+                 4GB for FAT32 compatibility
+  --keep       : Keep the intermediate files
+  --help       : This help.
+
 Requirements
 
- - a52dec, bash, cat, cut, echo, faac, ffmpeg, file, grep, mkfifo, mktemp, 
-   mkvextract, mkvinfo, mkvmerge, mp4creator, neroAacEnc, python, rm, sed, sox, 
-   stat, MP4Box
+ - bash, cat, cut, echo, faac, ffmpeg, file, grep, mkfifo, mktemp, mkvextract, 
+   mkvinfo, mkvmerge, mp4creator, neroAacEnc, python, rm, sed, sox, stat, MP4Box
    
 Known Limitations
 
  - Option to answer "Yes" to all prompts is not implemented.
  - Could be faster with better use of FIFOs to reduce file I/O.
  - MP4Box has a habbit of segmentation faulting. This script does what it can
-   to clean the output filenames to avoid this but it can still occur. If bad 
-   stuff happens force the use of 'mp4creator' with the --mp4creator option. 
+   to clean the output filenames to avoid this but crashes can still occur. If 
+   bad stuff happens force the use of 'mp4creator' with the --mp4creator option. 
  
 To Do
- - FORCE_MP4CREATOR
+
  - Fancy console output
+ - Use this to avoid using Python.
+     echo -n “)” | dd of=”$VIDEO_FILE” bs=1 seek=7 conv=notrunc  
  
 Source Code
 
@@ -125,9 +104,12 @@ References
  - http://wiki.flexion.org/ConvertingMKV.html
 
 v1.2 2009, 27th August.
- - Fixed NeroAacEnc parameters
- - Fixed DTS 5.1 to AAC 5.1 transcoding when using 'faac'
- - Simplified audio steam decoding by using 'dcadec' and 'a52dec'
+ - Added option to force the use of 'mp4creator' instead of 'MP4Box'.
+ - Added option to keep the intermidiate files created by the script.
+ - Improved audio steam decoding by using 'ffmpeg' and 'sox'. Fixed DTS 5.1 to 
+   AAC 5.1 transcoding which now works when using 'faac'.
+ - Improved bitrates for 'faac' and 'neroAacEnc'. AAC file sizes will be much 
+   closer for both. 
 
 v1.1 2009, 23rd April.
  - Fixed tool validation
@@ -138,7 +120,3 @@ v1.1 2009, 23rd April.
 
 v1.0 2009, 27th January.
  - Initial release
- 
-TODO
-Use this to avoid using Python.
-echo -n “)” | dd of=”$VIDEO_FILE” bs=1 seek=7 conv=notrunc 

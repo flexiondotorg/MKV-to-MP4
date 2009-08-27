@@ -2,7 +2,7 @@
 #
 # License
 #
-# Creates a PS3 compatible MPEG-4 from a MKV
+# Creates a PS3 or Xbox 360 compatible MPEG-4 from Matroska
 # Copyright (c) 2009 Flexion.Org, http://flexion.org/
 #
 # Permission is hereby granted, free of charge, to any person
@@ -29,23 +29,24 @@
 IFS=$'\n'
 VER="1.2"
 
-echo "MKV-to-MP4 v${VER} - Creates a PlayStation 3 compatible MPEG-4 from a MKV."
+echo "MKV-to-MP4 v${VER} - Creates a PS3 or Xbox 360 compatible MPEG-4 from Matroska."
 echo "Copyright (c) 2009 Flexion.Org, http://flexion.org. MIT License" 
 echo
 
 function usage {
     echo
 	echo "Usage"
-    echo "  ${0} movie.mkv [--yes] [--stereo] [--faac] [--ffmpeg] [--split] [--help]"
+    echo "  ${0} movie.mkv [--yes] [--stereo] [--faac] [--mp4creator] [--split] [--keep] [--help]"
     echo ""
     echo "You can also pass several optional parameters"
-    echo "  --yes    : Answer Yes to all prompts."
-    echo "  --stereo : Force a stereo down mix."
-    echo "  --faac   : Force the use of faac, even if NeroAacEnc is available."
-    echo "  --ffmpeg : Force the use of ffmpeg, even if a52dec and dcadec are available."    
-    echo "  --split  : If required, the output will be split at a boundary less than"
-    echo "             4GB for FAT32 compatibility"    
-    echo "  --help   : This help."    
+    echo "  --yes        : Answer Yes to all prompts."
+    echo "  --stereo     : Force a stereo down mix."
+    echo "  --faac       : Force the use of faac, even if NeroAacEnc is available."
+    echo "  --mp4creator : Force the use of mp4creator instead of MP4Box."    
+    echo "  --split      : If required, the output will be split at a boundary less than"
+    echo "                 4GB for FAT32 compatibility"    
+    echo "  --keep       : Keep the intermediate files"
+    echo "  --help       : This help."    
     echo
     exit 1
 }
@@ -183,7 +184,7 @@ function convert_video {
 function convert_subtitles {
 	TTXT_FILENAME=${FILENAME}.ttxt
 	# Convert the subtitles
-	if [ ! -z ${SUBS_ID} ]; then
+	if [ ! -z ${SUBS_ID} ] && [ ${FORCE_MP4CREATOR} -eq 0 ] ; then
 		echo "Converting subtitles"
 		rm ${FILENAME}.ttxt 2>/dev/null
 		MP4Box -ttxt ${SUBS_FILENAME}
@@ -197,12 +198,10 @@ function convert_audio {
         echo "Converting ${AUDIO_CH}ch ${AUDIO_FORMAT} to Stereo MPEG4-AAC"        				    
 		FAAC_QUALITY="120"
 		NERO_QUALITY="0.5"        
-		DECODE_MODE="wav"
     else
         echo "Converting ${AUDIO_CH}ch ${AUDIO_FORMAT} to Multi-channel MPEG4-AAC"                    
 		FAAC_QUALITY="210"	
 		NERO_QUALITY="0.5"		        
-		DECODE_MODE="wav6"
     fi    
                     
     AAC_FILENAME="${FILENAME}_${AUDIO_CH}ch.aac"    
@@ -221,63 +220,31 @@ function convert_audio {
         # Make sure the output files do not already exist.
         rm ${M4A_FILENAME} 2>/dev/null
 
-        # If the optional tools 'a52dec' and 'dcadec' were not found the use 
-        # 'ffmpeg' to decode the audio. This is a slower method.
-        if [ ${FORCE_FFMPEG} -eq 1 ]; then            
-            if [ ${AUDIO_CH} -eq 6 ]; then
-        		if [ ${FORCE_FAAC} -eq 1 ]; then            
-                    # Preserve 5.1 and use faac
-        	        if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	    		    	            
-                        ffmpeg -i "${AUDIO_FILENAME}" -f ac3 -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - remix 1 3 2 6 4 5 | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -I 1,2 -X -R ${AUDIO_RATE} --mpeg-vers 4 -
-        	        else
-                        ffmpeg -i "${AUDIO_FILENAME}" -f dts -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -I 1,2 -X -R ${AUDIO_RATE} --mpeg-vers 4 -
-        	        fi
-        		else
-        		    # Preserve 5.1 and use neroAacEnc
-        	        if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	    		
-                        ffmpeg -i "${AUDIO_FILENAME}" -f ac3 -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - remix 1 3 2 6 4 5 | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME}
-        	        else
-                        ffmpeg -i "${AUDIO_FILENAME}" -f dts -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME}                                      
-        	        fi    		
-        		fi
-            else            
-        		if [ ${FORCE_FAAC} -eq 1 ]; then            
-                    # Downmix to stereo and use faac
-                    ffmpeg -i "${AUDIO_FILENAME}" -f u16le -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 -
-        		else
-        		    # Downmix to stereo and use neroAacEnc
-                    ffmpeg -i "${AUDIO_FILENAME}" -f u16le -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME}
-        		fi
-            fi             
-        else  
-            # Optional tools were found.      
-		    if [ ${FORCE_FAAC} -eq 1 ]; then
-    			echo " - Using 'faac'"
-    	        if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	
-                    a52dec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 -
-                else                
-                    # DTS to FAAC is a bit quirky.
-                    # We need to handle 2.0 and 5.1 audio differently and faac won't
-                    # eat 32-bit floating point WAV files, so we convert with 'sox'
-                    if [ ${AUDIO_CH} -eq 6 ]; then
-                        dcadec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | sox -t .wav -c ${AUDIO_CH} -f - -t .wav -c ${AUDIO_CH} -s -b 16 - | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 -I 1,2 -
-                    else
-                        dcadec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | sox -t .wav -c ${AUDIO_CH} -f - -t .wav -c ${AUDIO_CH} -s -b 16 - | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 -                    
-                    fi                    
-                fi                			
-            else
-                echo " - Using 'neroAacEnc'"		
-            	if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	
-                    a52dec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME} 
-                else
-                    dcadec -o ${DECODE_MODE} "${AUDIO_FILENAME}" | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME}
-                fi                            
-            fi		       			
-        fi            
-        
-		echo " - Extracting audio from MP4 container..."
-        mp4creator --extract=1 "${M4A_FILENAME}" "${AAC_FILENAME}"
-        M4A_FILENAME="${AAC_FILENAME}"				       				
+        if [ ${AUDIO_CH} -eq 6 ]; then
+    		if [ ${FORCE_FAAC} -eq 1 ]; then            
+                # Preserve 5.1 and use faac
+    	        if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	    		    	            
+                    ffmpeg -i "${AUDIO_FILENAME}" -f ac3 -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - remix 1 3 2 6 4 5 | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -I 1,2 -X -R ${AUDIO_RATE} --mpeg-vers 4 -
+    	        else
+                    ffmpeg -i "${AUDIO_FILENAME}" -f dts -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -I 1,2 -X -R ${AUDIO_RATE} --mpeg-vers 4 -
+    	        fi
+    		else
+    		    # Preserve 5.1 and use neroAacEnc
+    	        if [ "${AUDIO_FORMAT}" == "AC3" ]; then			        	    		
+                    ffmpeg -i "${AUDIO_FILENAME}" -f ac3 -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - remix 1 3 2 6 4 5 | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME}
+    	        else
+                    ffmpeg -i "${AUDIO_FILENAME}" -f dts -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME}                                      
+    	        fi    		
+    		fi
+        else            
+    		if [ ${FORCE_FAAC} -eq 1 ]; then            
+                # Downmix to stereo and use faac
+                ffmpeg -i "${AUDIO_FILENAME}" -f u16le -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - | faac -q ${FAAC_QUALITY} -o ${M4A_FILENAME} -w -P -C ${AUDIO_CH} -X -R ${AUDIO_RATE} --mpeg-vers 4 -
+    		else
+    		    # Downmix to stereo and use neroAacEnc
+                ffmpeg -i "${AUDIO_FILENAME}" -f u16le -acodec pcm_s16le - | sox -t raw -s -b 16 -c${AUDIO_CH} -r${AUDIO_RATE} - -t wav - | neroAacEnc -q ${NERO_QUALITY} -lc -ignorelength -if - -of ${M4A_FILENAME}
+    		fi
+        fi                     
     fi
 }
 
@@ -301,26 +268,40 @@ function create_mp4 {
     	
 		# OK, pack the MPEG-4 and include subtitles if we have any.		
 		if [ -z ${SUBS_ID} ]; then
-			MP4Box -fps ${VIDEO_FPS} -add ${VIDEO_FILENAME} -add ${M4A_FILENAME} -new ${MP4_FILENAME}		            
-            #mp4creator --create="${VIDEO_FILENAME}" -r ${VIDEO_FPS} "${MP4_FILENAME}"
-            #mp4creator --create="${M4A_FILENAME}" "${MP4_FILENAME}"
+		    if [ ${FORCE_MP4CREATOR} -eq 1 ]; then
+        		echo " - Extracting audio from MP4 container..."
+                mp4creator --extract=1 "${M4A_FILENAME}" "${AAC_FILENAME}"		    
+                mp4creator --create="${VIDEO_FILENAME}" -r ${VIDEO_FPS} "${MP4_FILENAME}"
+                mp4creator --create="${AAC_FILENAME}" "${MP4_FILENAME}"		    
+		    else
+    			MP4Box -fps ${VIDEO_FPS} -add ${VIDEO_FILENAME} -add ${M4A_FILENAME} -new ${MP4_FILENAME}		            
+            fi    			
 		else
-			MP4Box -fps ${VIDEO_FPS} -add ${VIDEO_FILENAME} -add ${M4A_FILENAME} -add ${TTXT_FILENAME} -new ${MP4_FILENAME}					
-            #mp4creator --create="${VIDEO_FILENAME}" -r ${VIDEO_FPS} "${MP4_FILENAME}"
-            #mp4creator --create="${M4A_FILENAME}" "${MP4_FILENAME}"	
+   		    if [ ${FORCE_MP4CREATOR} -eq 1 ]; then		
+        		echo " - Extracting audio from MP4 container..."
+                mp4creator --extract=1 "${M4A_FILENAME}" "${AAC_FILENAME}"   		    
+                mp4creator --create="${VIDEO_FILENAME}" -r ${VIDEO_FPS} "${MP4_FILENAME}"
+                mp4creator --create="${AAC_FILENAME}" "${MP4_FILENAME}"	   		    
+   		    else
+    			MP4Box -fps ${VIDEO_FPS} -add ${VIDEO_FILENAME} -add ${M4A_FILENAME} -add ${TTXT_FILENAME} -new ${MP4_FILENAME}					
+            fi    			
 		fi			
 	fi        
 
 	# Remove the transient files
-	echo "Removing temporary files"
-	###echo " - ${VIDEO_FILENAME}"
-	#rm ${VIDEO_FILENAME} 2>/dev/null
-	###echo " - ${MKV_PART_FILENAME}"
-	#rm ${MKV_PART_FILENAME} 2>/dev/null
-	###echo " - ${M4A_FILENAME}"	
-	#rm ${M4A_FILENAME} 2>/dev/null
-	#rm ${SUBS_FILENAME} 2>/dev/null
-	#rm ${TTXT_FILENAME} 2>/dev/null
+    if [ ${FORCE_KEEP} -eq 0 ]; then	
+    	echo "Removing temporary files"
+	    echo " - ${VIDEO_FILENAME}"
+    	rm ${VIDEO_FILENAME} 2>/dev/null
+	    echo " - ${MKV_PART_FILENAME}"
+    	rm ${MKV_PART_FILENAME} 2>/dev/null
+	    echo " - ${M4A_FILENAME}"	
+    	rm ${M4A_FILENAME} 2>/dev/null
+	    echo " - ${AAC_FILENAME}"	
+    	rm ${AAC_FILENAME} 2>/dev/null
+	    #rm ${SUBS_FILENAME} 2>/dev/null
+    	rm ${TTXT_FILENAME} 2>/dev/null
+    fi    	
 }
 
 # Define the commands we will be using. If you don't have them, get them! ;-)
@@ -365,8 +346,7 @@ elif [ "${1}" == "-h" ] || [ "${1}" == "--h" ] || [ "${1}" == "-help" ] || [ "${
     usage
 else    
     MKV_FILENAME=`basename ${1}`
-    
-        
+            
     # Is the .mkv a real Matroska file?
     MKV_VALID=`file ${MKV_FILENAME} | grep Matroska`
     if [ -z "${MKV_VALID}" ]; then
@@ -380,7 +360,8 @@ FORCE_YES=0
 FORCE_2CH=0
 FORCE_FAAC=0
 FORCE_SPLIT=0
-FORCE_FFMPEG=0
+FORCE_MP4CREATOR=0
+FORCE_KEEP=0
 
 # Check for optional parameters
 while [ $# -gt 0 ]; 
@@ -396,12 +377,15 @@ do
         -f|-faac|--faac)
         	FORCE_FAAC=1
         	shift;;    
-        -m|-ffmpeg|--ffmpeg)
-        	FORCE_FFMPEG=1
+        -c|-mp4creator|--mp4creator)
+        	FORCE_MP4CREATOR=1
         	shift;;            	
 		-s|--split|-split)
             FORCE_SPLIT=1
             shift;;          	
+		-k|--keep|-keep)
+            FORCE_KEEP=1
+            shift;;          	            
         -h|--h|-help|--help|-?)
             usage;;        	    	           	
        	*)
@@ -416,21 +400,6 @@ if [ $? -eq 1 ]; then
     echo "WARNING! 'neroAacEnc' not found. Will use 'faac' instead."
     FORCE_FAAC=1    
 fi        
-
-which dcadec >/dev/null  
-if [ $? -eq 1 ]; then
-    echo "WARNING! 'dcadec' not found. Will use 'ffmpeg' instead."
-    FORCE_FFMPEG=1    
-fi        
-
-which a52dec >/dev/null  
-if [ $? -eq 1 ]; then
-    echo "WARNING! 'a52dec' not found. Will use 'ffmpeg' instead."
-    FORCE_FFMPEG=1    
-fi        
-
-# Only interested in 'ffmpeg' for now.
-FORCE_FFMPEG=1
 
 # Strip .mkv from the input file name and clean it so it can be used to define 
 # other filenames
