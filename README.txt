@@ -101,6 +101,7 @@ References
  - https://bugs.launchpad.net/ubuntu/+source/gpac/+bug/273075
  - http://www.jenom.com/modules.php?name=News&file=article&cid=34
  - http://lists.mplayerhq.hu/pipermail/ffmpeg-devel/2007-April/028222.html
+ - http://www.xs4all.nl/~carlo17/howto/encode.html
  - http://wiki.flexion.org/ConvertingMKV.html
 
 v1.2 2009, 27th August.
